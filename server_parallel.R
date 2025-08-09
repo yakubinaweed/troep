@@ -44,8 +44,14 @@ run_refiner_task <- function(Data, NBootstrap, model, age_range, value_col, age_
     if (nrow(filtered_data) < 50) {
       return(list(error = paste("Insufficient data for age range", paste(age_range, collapse="-"), "(n < 50).")))
     }
+
+    # Ensure the data passed to refineR is a numeric vector
+    values_for_analysis <- filtered_data[[value_col]]
+    if (!is.vector(values_for_analysis) || !is.numeric(values_for_analysis)) {
+        return(list(error = paste("Column", value_col, "is not a numeric vector after filtering.")))
+    }
     
-    refiner_model <- refineR::findRI(Data = filtered_data[[value_col]], NBootstrap = NBootstrap, model = model)
+    refiner_model <- refineR::findRI(Data = values_for_analysis, NBootstrap = NBootstrap, model = model)
     
     return(list(model = refiner_model, age_range = age_range))
   }, error = function(e) {
@@ -119,9 +125,10 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
       message_rv(list(text = "Please select the value and age columns.", type = "error"))
       return(NULL)
     }
-    
+
+    # CRITICAL FIX: Check if selected columns are numeric
     if (!is.numeric(data_raw[[input$parallel_col_value]]) || !is.numeric(data_raw[[input$parallel_col_age]])) {
-      message_rv(list(text = "Error: Value and Age columns must contain numeric data.", type = "error"))
+      message_rv(list(text = "Error: Value and Age columns must contain numeric data. Please check your file.", type = "error"))
       return(NULL)
     }
     
@@ -169,7 +176,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
       n_bootstrap <- as.integer(input$parallel_nbootstrap)
       model_choice <- input$parallel_model_choice
       
-      # Filter data by gender first
+      # Filter data by gender first, and importantly, REMOVE ROWS WITH NA VALUES
       if (input$parallel_col_gender != "" && gender_to_analyze != "Both") {
         gender_data <- data_raw %>%
           mutate(Gender_Standardized = case_when(
@@ -177,11 +184,13 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
             grepl("female|f|vrouw", !!rlang::sym(input$parallel_col_gender), ignore.case = TRUE) ~ "Female",
             TRUE ~ "Other"
           )) %>%
-          filter(Gender_Standardized == gender_to_analyze)
+          filter(Gender_Standardized == gender_to_analyze) %>%
+          na.omit() 
       } else {
         # Use a dummy column if no gender column or if 'Both' is selected
         gender_data <- data_raw %>%
-          mutate(Gender_Standardized = "Combined")
+          mutate(Gender_Standardized = "Combined") %>%
+          na.omit() 
       }
 
       if (nrow(gender_data) == 0) {
@@ -206,14 +215,27 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
       # Setup parallel cluster and load necessary libraries on all worker nodes
       cl <- parallel::makeCluster(n_cores)
       
+      # CRITICAL FIX: Explicitly export all necessary objects to the cluster
+      cluster_export_vars <- c(
+        "run_refiner_task",
+        "gender_data",
+        "n_bootstrap",
+        "model_choice",
+        "input$parallel_col_value",
+        "input$parallel_col_age"
+      )
+      
+      # CRITICAL FIX: Force evaluation of inputs before exporting to the cluster
+      col_value_input <- input$parallel_col_value
+      col_age_input <- input$parallel_col_age
+
       parallel::clusterEvalQ(cl, {
         library(refineR)
         library(tidyverse)
         library(rlang)
       })
       
-      # Export the function and necessary objects to the worker nodes
-      parallel::clusterExport(cl, c("run_refiner_task"), envir = environment())
+      parallel::clusterExport(cl, varlist = c("run_refiner_task", "gender_data", "n_bootstrap", "model_choice", "col_value_input", "col_age_input"), envir = environment())
       
       # Run the analysis in parallel
       results <- parallel::parLapply(cl, tasks, function(task) {
