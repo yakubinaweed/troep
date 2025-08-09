@@ -13,10 +13,12 @@ library(shinyFiles)
 library(shinyWidgets)
 library(bslib)
 library(ggplot2)
+library(parallel) # NEW: Added for parallel processing
 
 # Source the server modules for each tab
 source("server_main.R")
 source("server_gmm.R")
+source("server_parallel.R") # NEW: Added the new parallel server module
 
 server <- function(input, output, session) {
   
@@ -29,6 +31,10 @@ server <- function(input, output, session) {
   selected_dir_reactive <- reactiveVal(NULL)
   message_rv <- reactiveVal(list(type = "", text = ""))
   analysis_running_rv <- reactiveVal(FALSE)
+  
+  # NEW: Reactive values for the Parallel RefineR tab
+  parallel_data_rv <- reactiveVal(NULL)
+  parallel_results_rv <- reactiveVal(NULL)
 
   # --- Centralized Message Display ---
   # Renders a UI element to display application-wide messages
@@ -66,4 +72,5 @@ server <- function(input, output, session) {
   # Call the modular server functions for each tab
   mainServer(input, output, session, data_reactive, selected_dir_reactive, message_rv, analysis_running_rv)
   gmmServer(input, output, session, gmm_uploaded_data_rv, gmm_processed_data_rv, gmm_transformation_details_rv, message_rv, analysis_running_rv)
+  parallelServer(input, output, session, parallel_data_rv, parallel_results_rv, message_rv, analysis_running_rv) # NEW: Call the new parallel server module
 }

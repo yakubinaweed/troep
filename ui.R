@@ -118,6 +118,48 @@ Before running the GMM, the data is preprocessed: the selected value's column is
     )
   ),
 
+  # NEW TAB FOR PARALLEL REFINER ANALYSIS
+  tabPanel(
+    title = "Parallel RefineR",
+    useShinyjs(),
+    tags$head(
+      includeCSS("www/styles.css")
+    ),
+    p("This tab automates the estimation of reference intervals for multiple subpopulations simultaneously using parallel processing. It allows you to define age ranges and analyze them with a chosen number of CPU cores."),
+    sidebarLayout(
+      sidebarPanel(
+        style = "padding-right: 15px;",
+        fileInput(inputId = "parallel_data_file", label = "Upload Data (Excel File)", accept = c(".xlsx")),
+        hr(),
+        # Dynamic inputs for selecting data columns
+        selectInput(inputId = "parallel_col_value", label = "Select Column for Values:", choices = c("None" = ""), selected = ""),
+        selectInput(inputId = "parallel_col_age", label = "Select Column for Age:", choices = c("None" = ""), selected = ""),
+        selectInput(inputId = "parallel_col_gender", label = "Select Column for Gender:", choices = c("None" = ""), selected = ""),
+        hr(),
+        # New inputs for parallel processing
+        textInput(inputId = "parallel_age_ranges_str", label = "Age Subpopulations (comma-separated):", placeholder = "e.g., 0-18, 19-39, 40-64"),
+        numericInput(inputId = "parallel_nbootstrap", label = "Bootstrap Iterations (NBootstrap):", value = 100, min = 1, step = 1),
+        numericInput(inputId = "parallel_n_cores", label = "Number of CPU Cores:", value = parallel::detectCores() - 1, min = 1, max = parallel::detectCores(), step = 1),
+        radioButtons(inputId = "parallel_gender_choice", label = "Select Gender:", choices = c("Male" = "Male", "Female" = "Female", "Both" = "Both"), selected = "Both", inline = TRUE),
+        radioButtons(inputId = "parallel_model_choice", label = "Select Transformation Model:", choices = c("BoxCox" = "BoxCox", "modBoxCox" = "modBoxCox"), selected = "BoxCox", inline = TRUE),
+        
+        # Action buttons for the parallel analysis
+        actionButton("parallel_analyze_btn", "Analyze", class = "btn-primary"),
+        actionButton("parallel_reset_btn", "Reset File", class = "btn-secondary"),
+        div(style = "margin-top: 15px;", uiOutput("app_message")), # NEW: Message box for the parallel tab
+        hr(),
+        # Inputs for manual reference limits and units for the plot
+        numericInput("parallel_ref_low", "Reference Lower Limit:", value = NA),
+        numericInput("parallel_ref_high", "Reference Upper Limit:", value = NA),
+        textInput(inputId = "parallel_unit_input", label = "Unit of Measurement", value = "mmol/L", placeholder = "ex. g/L")
+      ),
+      mainPanel(
+        uiOutput("parallel_summary_table"),
+        uiOutput("parallel_plots_ui")
+      )
+    )
+  ),
+  
   # Footer of the application with copyright and a link to the author's GitHub
   footer = tags$footer(
     HTML('© 2025 <a href="https://github.com/yakubinaweed/refineR-reference-interval" target="_blank">Naweed Yakubi</a> • All rights reserved.'),
